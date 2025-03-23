@@ -1,19 +1,15 @@
 import fs from 'fs';
+import sendMail from './mailer.js';
 const pageScraper = async (browser) => {
-	// lINE 205 CONTAINS THE FINAL BUY BOT CLICK - ONLY UNCOMMENT IF YOU WANT A BOT TO BUY YOU A CARD!
-	/* TEST URLS 
-	const url = 'https://www.newegg.com/p/pl?d=rtx+4070ti&Order=1';
-	const xtUrl = "https://www.newegg.com/p/pl?d=7900+xt&Order=1";
-	const n70xt = "https://www.newegg.com/p/pl?d=rx+9070+xt&Order=1";
-	const sapphireUrl = "https://www.newegg.com/p/pl?d=sapphire+pure+rx+9070+xt&Order=1";
-	const asRockUrl = "https://www.newegg.com/p/pl?d=asrock+rx+9070+xt&Order=1";
-	// CARDS.TXT HEADER
-	let logheader = false;
-	*/
+	const bbTestUrl = 'https://www.bestbuy.com/site/valve-steam-wallet-20-gift-card/6576811.p?skuId=6576811';
+	const bbBaseUrl = 'https://www.bestbuy.com';
+	const bbxfxUrl = 'https://www.bestbuy.com/site/xfx-swift-amd-radeon-rx-9070xt-16gb-gddr6-pci-express-5-0-gaming-graphics-card-black/6620455.p?skuId=6620455';
+	const bbgigabyteUrl = 'https://www.bestbuy.com/site/gigabyte-radeon-rx-9070-xt-gaming-16g-gddr6-pci-express-5-0-graphics-card-black/6622482.p?skuId=6622482';
 	const baseUrl = 'https://www.newegg.com';
 	// SPECIFIC/DESIRED CARD URL
-	//const testCardUrl = 'https://www.newegg.com/peladn-rx-580/p/27N-008H-00024';
+	const testCardUrl = 'https://www.newegg.com/peladn-rx-580/p/27N-008H-00024';
 	const cardUrl = 'https://www.newegg.com/gigabyte-gv-r9070xtgaming-16gd-amd-radeon-rx-9070-xt-16gb-gddr6/p/N82E16814932783?Item=N82E16814932783'
+	const asRockCardUrl = 'https://www.newegg.com/asrock-steel-legend-rx9070xt-sl-16g-amd-radeon-rx-9070-xt-16gb-gddr6/p/N82E16814930136?Item=N82E16814930136';
 	const backupCardUrl = 'https://www.newegg.com/xfx-swift-rx-97tswf3w9-amd-radeon-rx-9070-xt-16gb-gddr6/p/N82E16814150907?Item=N82E16814150907'
 	// BOOLEAN GLOBAL PURCHASE SUCCESS VAR
 	let success = false;
@@ -25,127 +21,147 @@ const pageScraper = async (browser) => {
 		}
 		return false;
 	};
-	/* LOGGING CARDS FOR EMAILS SECTION - NO PURCHASE LOGIC
-	const waitForElements =  async(page) => {
-		await page.waitForSelector('.item-features', { visible: true });
-		await page.waitForSelector(
-			'div.item-action > ul.price > li.price-current > strong',
-			{ visible: true }
-		);
-		await page.waitForSelector('.item-title', { visible: true });
-	}
 	
-	const scrapeCards = async () => {
-		let cardHash = {};
-		const cells = await page.$$eval('.item-cell', (cell) => {
-			return cell.map((data) => {
-				let promo = data.querySelector('.item-promo');
-				let lowerConstraint = '499.99';
-				let upperConstraint = '750.00';
-				let price = data
-					.querySelector('.price-current')
-					.textContent.match(/\d*,*\d+.\d{2}/g)[0]
-					.replace(',', '');
-				if (promo) {
-					if (promo.textContent === 'OUT OF STOCK') {
-						return null;
-					}
-				}
-				if ((parseFloat(price) < parseFloat(lowerConstraint)) || (parseFloat(price) > parseFloat(upperConstraint))) {
-					return null;
-				}
-				return {
-					model: data.querySelector('.item-features').textContent,
-					title: data.querySelector('.item-title').textContent,
-					price: price,
-				};
-			});
+	function delay(time) {
+		return new Promise(function(resolve) { 
+			setTimeout(resolve, time)
 		});
-		return cells;
-	};
+	 }
 
-
-	const processCards = (scrapedCards) => {
-		const comparePrices = (a, b) => {
-			if (parseInt(a.price) > parseInt(b.price)) return 1;
-			if (parseInt(a.price) < parseInt(b.price)) return -1;
-			return 0;
-		};
-		let cards = scrapedCards.filter((card) => card !== null);
-		cards.sort(comparePrices);
-		let data = 'Bot Run Date: ' + new Date().toString() + '\n\n';
-		if (cards.length && !logheader) {
-			logheader = true;
-			fs.writeFile('cards.txt', data, 'utf8', function (err) {
-				if (err) {
-					return console.log(err);
-				}
-			});
-		}
-		for (let i = 0; i < cards.length; i++) {
-			let subKeys = Object.keys(cards[i]);
-			let data = '';
-			for (let j = 0; j < subKeys.length; j++) {
-				let subKey = subKeys[j];
-				let lineEnd = '\n';
-				subKey === 'price' && (lineEnd = '\n\n');
-				data += cards[i][subKey] + lineEnd;
+	// HANDLE PURCHASE SUCCESS
+	const handlePurchaseSuccess = (data) => {
+		success = true;
+		fs.writeFile('purchased.txt', data, 'utf8', function (err) {
+			if (err) {
+				return console.log(err);
 			}
-			fs.appendFile('cards.txt', data, 'utf8', function (err) {
-				if (err) {
-					console.log(err);
-				}
+			console.log('wrote to purchased...card acquired!');
+			sendMail();
+		});
+	 }
+  // HANDLE PURCHASE FAILURE
+	 const handlePurchaseFailure = (isHeader=false) => {
+		const timestamp = new Date().toISOString();
+		let data = `\nAttempted Purchase. OOS, pick up only, or above constraint. Time: ${timestamp}`;
+		isHeader && (data=`\n####CARD JOB LOG START - ${timestamp}####`);
+		fs.appendFile('log.txt', data, 'utf8', function (err) {
+			if (err) {
+				return console.log(err);
+			}
+		});
+	 }
+
+	// MIMIC HUMAN BROWSER SESSION
+	const mimicHumanUserSession = async(referer=false) => {
+		referer ? (referer='https://www.bestbuy.com') : (referer='https://www.newegg.com');
+		await page.setExtraHTTPHeaders({
+			'Accept-Language': 'en-US,en;q=0.9',
+			'Referer': `${referer}`,
 			});
-		}
 	}
 
-	let page = await browser.newPage();
-	console.log(`navigating to ${url}`);
-	await page.goto(url, { waitUntil: 'load' });
-	await waitForElements(page);
-	const allCards = await scrapeCards();
-	processCards(allCards);
+	// BEST BUY LOGIN
+	 const bestBuyLogin = async() => {
+		await page.goto(bbBaseUrl, { waitUntil: 'domcontentloaded' });
+		// BEHOLD - THE LOGIN PROCESS...
+		//await page.waitForSelector('[data-track="ft_sign_in_create_account"]');
+		await page.mouse.move(100, 200);
+		const [response] = await Promise.all([
+			page.waitForNavigation(),
+			page.mouse.move(100, 200),
+			page.click('[data-track="ft_sign_in_create_account"]'),
+		]);
+		await page.waitForSelector('.tb-input');
+		await delay(3000)
+		await page.type('.tb-input', process.env.EMAIL, {delay: 125})
+		await page.click('[data-track="Sign In - Continue"]');
+		await page.waitForSelector('#password-radio');
+		await page.mouse.move(100, 200);
+		await delay(4000)
+		await page.click('#password-radio');
+		await page.waitForSelector('.tb-input');
+		await page.type('.tb-input', process.env.BBPASS, {delay: 200});
+		const [presponse] = await Promise.all([
+			page.waitForNavigation(),
+			page.mouse.move(100, 200),
+			page.mouse.move(200, 300),
+			await delay(4000),
+			page.click('.cia-form__controls__submit'),
+		]).catch(async() => {
+			await delay(2000)
+			await page.waitForSelector('.c-alert')
+			await page.click('#email-code-radio')
+			const [failResponse] = await Promise.all([
+				page.waitForNavigation(),
+				page.click('.cia-form__controls__submit')
+			])
+		});
+			
+	 }
 
-	await page.goto(xtUrl, { waitUntil: 'load' });
-	console.log(`navigating to ${xtUrl}`);
-	await waitForElements(page);
-	const xtCards = await scrapeCards();
-	processCards(xtCards);
+	 // BEST BUY PURCHASING LOGIC FOR CARD URLS...
+	const attemptBBPurchase = async (url) => {
+		let hasShipping = true;
+		let hasBuyNow = true;
+		// AWAIT NAV TO CARD URL
+		await page.goto(url, { waitUntil: 'domcontentloaded' });
+		// BESTBUY HAS A CUSTOM toString THAT SEEMS TO CAUSE A RECURSIVE MAX STACK ERROR
+		// HOT FIX DELETES THAT...PROLLY NOT IDEAL LOL...
+		await page.evaluateOnNewDocument(() => {
+			delete Function.prototype.toString
+		})
+		//await waitForElements(page);
+		// DOES THE PAGE HAVE A SHIPPING OPTION - WE NEED SHIPPING
+		await delay(4000);
+		hasShipping = await elementExists('.fulfillment-fulfillment-summary > div > div > div > fieldset > button:last-child')
+		if (hasShipping) {
+			await page.click('.fulfillment-fulfillment-summary > div > div > div > fieldset > button:last-child');
+			hasBuyNow = await elementExists('.fulfillment-add-to-cart-button > div > div > button:last-child');
+			if (hasBuyNow) {
+				const [response] = await Promise.all([
+					page.waitForNavigation(),
+					page.click('.fulfillment-add-to-cart-button > div > div > button:last-child')
+				]).catch((e) => {
+					console.log('found buy now, but click->navigate failed...')
+					console.log(e)
+				})
+				await page.waitForSelector('#cvv');
+				await page.type('#cvv', process.env.CVV, {delay: 125});
+				const cardPrice = await page.$eval('[data-testid="LineItemPrice"]', (el) => el.textContent);
+				const cardName = await page.$eval('[data-testid="LineItemShortLabel"]', (el) => el.textContent);
+				const cleanPrice = cardPrice.substring(1,);
+				if (parseFloat(upperContraint) > parseFloat(cleanPrice)) {
+					// ****COMMENT THIS OUT DURING TESTING!! THIS WILL PLACE THE ORDER!!****
+					const [bbPurchResponse] = await Promise.all([
+						page.waitForNavigation(),
+						page.click('[data-track="Place your Order - Docked"]'), // COMMENT OUT TO DISABLE PURCHASE
+					])
+					const data = 'PURCHASE SUCCESS\nCard: ' + cardName + '\nPrice: ' + cardPrice;
+					handlePurchaseSuccess(data)
+				} else {
+					handlePurchaseFailure();
+				}
 
-	await page.goto(n70xt, { waitUntil: 'load' });
-	console.log(`navigating to ${n70xt}`);
-	await waitForElements(page);
-	const n70Cards = await scrapeCards();
-	processCards(n70Cards);
-
-	await page.goto(sapphireUrl, { waitUntil: 'load' });
-	console.log(`navigating to ${sapphireUrl}`);
-	await waitForElements(page);
-	const sapphireCards = await scrapeCards();
-	processCards(sapphireCards);
-
-	await page.goto(asRockUrl, { waitUntil: 'load' });
-	console.log(`navigating to ${asRockUrl}`);
-	await waitForElements(page);
-	const asRockCards = await scrapeCards();
-	processCards(asRockCards);
-
-	*/
+			} else {
+				handlePurchaseFailure();
+			}
+			
+		} else {
+			handlePurchaseFailure();
+		}
+	}
 
 	// PURCHASING LOGIC SECTION - CAUTION!! WILL PURCHASE CARDS AUTOMATICALLY
-
-	let page = await browser.newPage();
-	console.log(`navigating to ${baseUrl}`);
-	await page.goto(baseUrl, { waitUntil: 'load' });
-	// BEHOLD - THE LOGIN PROCESS...
-	const loginBtn = await elementExists('.header2021-account')
-	if (loginBtn) {
+	const newEggLogin = async() => {
+		await page.goto(baseUrl, { waitUntil: 'load' });
+		// BEHOLD - THE LOGIN PROCESS...
+		await page.waitForSelector('.header2021-account');
 		const [response] = await Promise.all([
 			page.waitForNavigation(),
 			page.click('.header2021-account > a'),
 		]);
 		await page.waitForSelector('#labeled-input-signEmail');
-		await page.type('#labeled-input-signEmail', process.env.NEWEGGEMAIL);
+		await page.type('#labeled-input-signEmail', process.env.EMAIL);
 		await page.click('#signInSubmit');
 		await page.waitForSelector('#labeled-input-password');
 		await page.type('#labeled-input-password', process.env.NEWEGGPASS)
@@ -154,11 +170,11 @@ const pageScraper = async (browser) => {
 			page.click('#signInSubmit'),
 		]);
 	}
+	
 	// PURCHASING LOGIC FOR CARD URLS...
 	const attemptPurchase = async (url) => {
 		// AWAIT NAV TO CARD URL
 		await page.goto(url, { waitUntil: 'load' });
-		console.log(`navigating to ${url}`);
 		//await waitForElements(page);
 		// DOES THE PAGE HAVE A BUY BUTTON
 		const hasProductBuyDiv = await elementExists('#ProductBuy');
@@ -192,8 +208,7 @@ const pageScraper = async (browser) => {
 					await page.type('.mask-cardnumber', process.env.CARDNUMBER)
 					await page.click('.modal-footer > .button-m')
 				}
-				// MAX I'M WILLING TO SPEND
-				let upperContraint = "660.00"
+
 				let cartTotal = await page.$eval('.summary-content-total > span > strong', (el) => el.textContent);
 				console.log(cartTotal)
 				let placeOrderBtnText = await page.$eval('#btnCreditCard', (btn) => btn.textContent)
@@ -201,55 +216,57 @@ const pageScraper = async (browser) => {
 				// MAKE SURE TOTAL IS SENSICAL AND THAT PLAVE ORDER BUTTON EXISTS
 				if (placeOrderBtnText === 'Place Order' && parseFloat(upperContraint) > parseFloat(cartTotal)) {
 					console.log('order is below contraint and the place order button exists...PURCHASING!!')
-					// ****COMMENT THIS OUT DURING TESTING!! THIS WILL PLACE THE ORDER!!****
-					await page.click('#btnCreditCard') // COMMENT THIS OUT TO AVOID PURCHASE!!!
-					success = true
+					//****COMMENT THIS OUT DURING TESTING!! THIS WILL PLACE THE ORDER!!****
+					const [purchResponse] = await Promise.all([
+						page.waitForNavigation(),
+						page.click('#btnCreditCard') // COMMENT THIS OUT TO AVOID PURCHASE!!!
+					])
 					const data = 'PURCHASE SUCCESS\nCard: ' + cardTitle + '\nPrice: ' + cartTotal;
-					fs.writeFile('purchased.txt', data, 'utf8', function (err) {
-						if (err) {
-							return console.log(err);
-						}
-						console.log('wrote to purchased...card acquired!');
-					});
+					handlePurchaseSuccess(data);
 				} else {
-					const timestamp = Date.now();
-					let data = `\nAttempted Purchase. Constraint or Place Order not met. Time: ${timestamp}`;
-					fs.appendFile('log.txt', data, 'utf8', function (err) {
-						if (err) {
-							return console.log(err);
-						}
-					});
-
+					handlePurchaseFailure();
 				}
 			} else {
-				const timestamp = Date.now();
-				let data = `\nAttempted Purchase. Could not add to cart - likely out of stock. Time: ${timestamp}`;
-				fs.appendFile('log.txt', data, 'utf8', function (err) {
-					if (err) {
-						return console.log(err);
-					}
-				});
+				handlePurchaseFailure();
 			}
 		} else {
-			const timestamp = Date.now();
-			let data = `\nAttempted Purchase. Check card page - no buy divs on page. Time: ${timestamp}`;
-			fs.appendFile('log.txt', data, 'utf8', function (err) {
-				if (err) {
-					return console.log(err);
-				}
-			});
+			handlePurchaseFailure();
 		}
 	}
-	// FIRST CHOICE CARD
-	await attemptPurchase(cardUrl)
-	/* TESTING AWAITING SUCCESS - SHOULD ABORT SECOND RUN IF FIRST RUN GETS CARD
-	if (!success) {
-		await attemptPurchase(testCardUrl);
-	} */
-	// BACKUP CARD IF FIRST CHOICE NO WORKEY
-	if (!success) {
-		await attemptPurchase(backupCardUrl);
+	const maxAttempts = 18
+	// MAX I'M WILLING TO SPEND
+	const upperContraint = "760.00"
+	const makeNewEggPurchaseAttempts = async() => {
+		await mimicHumanUserSession();
+		await newEggLogin();
+		let attempts = 0;
+		while(attempts<maxAttempts && !success) {
+			//await attemptPurchase(testCardUrl);
+			await attemptPurchase(asRockCardUrl);
+			!success && await attemptPurchase(cardUrl);
+			!success && await attemptPurchase(backupCardUrl);
+			attempts++;
+		}
 	}
-	
+
+	const makeBBPurchaseAttempts = async() => {
+		await mimicHumanUserSession(true);
+		await bestBuyLogin();
+		let attempts = 0;
+		while(attempts<maxAttempts && !success) {
+			await attemptBBPurchase(bbgigabyteUrl);
+			//!success && await attemptBBPurchase(bbTestUrl);
+			!success && await attemptBBPurchase(bbxfxUrl);
+			attempts++;
+		}
+	}
+
+	let page = await browser.newPage();
+	await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36');
+	handlePurchaseFailure(true) // BEGIN FAILURE LOG HEADER
+	await makeNewEggPurchaseAttempts();
+	if (!success) {
+		await makeBBPurchaseAttempts();
+	}
 };
 export default pageScraper;
