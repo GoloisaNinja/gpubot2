@@ -155,15 +155,22 @@ const pageScraper = async (browser) => {
 	const newEggLogin = async() => {
 		await page.goto(baseUrl, { waitUntil: 'load' });
 		// BEHOLD - THE LOGIN PROCESS...
+		await delay(2000);
+		await page.mouse.move(100,200);
+		await page.mouse.move(250,40);
+		await delay(1500);
 		await page.waitForSelector('.header2021-account');
 		const [response] = await Promise.all([
 			page.waitForNavigation(),
 			page.click('.header2021-account > a'),
 		]);
 		await page.waitForSelector('#labeled-input-signEmail');
+		await delay(2000);
 		await page.type('#labeled-input-signEmail', process.env.EMAIL);
+		await delay(2400);
 		await page.click('#signInSubmit');
 		await page.waitForSelector('#labeled-input-password');
+		await delay(2700);
 		await page.type('#labeled-input-password', process.env.NEWEGGPASS)
 		const [presponse] = await Promise.all([
 			page.waitForNavigation(),
@@ -175,6 +182,7 @@ const pageScraper = async (browser) => {
 	const attemptPurchase = async (url) => {
 		// AWAIT NAV TO CARD URL
 		await page.goto(url, { waitUntil: 'load' });
+		await delay(2000);
 		//await waitForElements(page);
 		// DOES THE PAGE HAVE A BUY BUTTON
 		const hasProductBuyDiv = await elementExists('#ProductBuy');
@@ -185,6 +193,7 @@ const pageScraper = async (browser) => {
 			// DOES THE PAGE HAVE A ADD TO CART BUTTON
 			if (addToCartExists) {
 				let cardTitle = await page.$eval('.product-title', (title) => title.textContent);
+				await page.mouse.move(100,200);
 				await page.click('#ProductBuy > div > div:nth-child(2) > button.btn');
 				// MANAGE NEWEGG GARBAGE POPUPS FOR ADD ONS AND PROCEED TO CART
 				await page.waitForSelector('.modal-footer');
